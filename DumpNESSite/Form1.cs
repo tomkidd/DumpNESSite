@@ -39,6 +39,8 @@ namespace DumpNESSite
 
             oDoc = oWord.Documents.Add(ref m, ref m, ref m, ref m);
 
+            oWord.ActiveDocument.Range(ref m, ref m).NoProofing = 1;
+
             foreach (string url in txtLinks.Lines)
             {
                 if (!string.IsNullOrWhiteSpace(url))
@@ -61,7 +63,10 @@ namespace DumpNESSite
 
                     foreach (HtmlAgilityPack.HtmlNode imgNode in imgNodes)
                     {
-                        string src = imgNode.Attributes["src"].Value + ";" + imgNode.Attributes["width"].Value + ";" + imgNode.Attributes["height"].Value;
+                        string width = imgNode.Attributes.Contains("width") ? imgNode.Attributes["width"].Value : null;
+                        string height = imgNode.Attributes.Contains("height") ? imgNode.Attributes["height"].Value : null;
+
+                        string src = imgNode.Attributes["src"].Value + ";" + width + ";" + height;
                         changedNodes.Add(src, imgNode);
                     }
 
@@ -113,27 +118,34 @@ namespace DumpNESSite
 
                             if (outputline.StartsWith("http"))
                             {
-                                byte[] tempImageData;
-
-                                using (System.Net.WebClient wc = new System.Net.WebClient())
+                                try
                                 {
-                                    if (File.Exists(tempImage)) File.Delete(tempImage);
-                                    tempImageData = wc.DownloadData(outputline.Split(';')[0]);
+                                    byte[] tempImageData;
+
+                                    using (System.Net.WebClient wc = new System.Net.WebClient())
+                                    {
+                                        if (File.Exists(tempImage)) File.Delete(tempImage);
+                                        tempImageData = wc.DownloadData(outputline.Split(';')[0]);
+                                    }
+
+                                    Image tempImageOriginal;
+
+                                    using (var ms = new MemoryStream(tempImageData))
+                                    {
+                                        tempImageOriginal = Image.FromStream(ms);
+                                    }
+
+                                    int width = !string.IsNullOrWhiteSpace(outputline.Trim().Split(';')[1]) ? int.Parse(outputline.Trim().Split(';')[1]) : tempImageOriginal.Width;
+                                    int height = !string.IsNullOrWhiteSpace(outputline.Trim().Split(';')[2]) ? int.Parse(outputline.Trim().Split(';')[2]) : tempImageOriginal.Height;
+
+                                    Image tempImageResized = (Image)(new Bitmap(tempImageOriginal, new Size(width, height)));
+                                    tempImageResized.Save(tempImage);
+
+                                    oPara2.Alignment = Microsoft.Office.Interop.Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                                    oPara2.Range.InlineShapes.AddPicture(tempImage, false);
                                 }
-
-                                Image tempImageOriginal;
-
-                                using (var ms = new MemoryStream(tempImageData))
-                                {
-                                    tempImageOriginal = Image.FromStream(ms);
-                                }
-
-                                Image tempImageResized = (Image)(new Bitmap(tempImageOriginal, new Size(int.Parse(outputline.Split(';')[1]), int.Parse(outputline.Split(';')[2]))));
-                                tempImageResized.Save(tempImage);
-
-                                oPara2.Alignment = Microsoft.Office.Interop.Word.WdParagraphAlignment.wdAlignParagraphCenter;
-
-                                oPara2.Range.InlineShapes.AddPicture(tempImage, false);
+                                catch { }
                             }
                             else
                             {
@@ -144,7 +156,7 @@ namespace DumpNESSite
                                 int code = int.Parse(codePoint, System.Globalization.NumberStyles.HexNumber);
                                 string unicodeString = char.ConvertFromUtf32(code).ToString();
 
-                                oPara2.Range.Text = outputline.Trim();
+                                oPara2.Range.Text = outputline.Replace("  ", " ").Trim();
 
                                 if (outputline.StartsWith(unicodeString))
                                 {
@@ -221,14 +233,14 @@ namespace DumpNESSite
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            //txtLinks.Text = File.ReadAllText("links.txt");
+            txtLinks.Text = File.ReadAllText("links.txt");
 
-            string[] links = File.ReadAllLines("links.txt");
+            //string[] links = File.ReadAllLines("links.txt");
 
-            for (int i = 0; i < 5; i++)
-            {
-                txtLinks.Text += links[i] + Environment.NewLine;
-            }
+            //for (int i = 0; i < 5; i++)
+            //{
+            //    txtLinks.Text += links[i] + Environment.NewLine;
+            //}
         }
 
     }
