@@ -24,6 +24,10 @@ namespace DumpNESSite
         {
             StringBuilder sbOutput = new StringBuilder();
 
+            string codePoint = "00A0";
+            int code = int.Parse(codePoint, System.Globalization.NumberStyles.HexNumber);
+            string unicodeNBSP = char.ConvertFromUtf32(code).ToString();
+
             string tempImage = Path.Combine(System.Environment.CurrentDirectory, "temp.jpg");
 
             Microsoft.Office.Interop.Word.Application oWord;
@@ -50,9 +54,9 @@ namespace DumpNESSite
                     doc.LoadHtml(new System.Net.WebClient().DownloadString(url));
                     string title = doc.DocumentNode.SelectSingleNode("/html/body/div[3]/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/div/div/div/div/div/div/div/div/div/h3").InnerText;
 
-                    if (title.Split('-').Length == 2)
+                    if (title.Split(new string[] { " - " }, StringSplitOptions.None).Length == 2)
                     {
-                        title = title.Split('-')[1].Trim();
+                        title = title.Split(new string[] { " - " }, StringSplitOptions.None)[1].Trim();
                     }
 
                     HtmlAgilityPack.HtmlNode contentNode = doc.DocumentNode.SelectSingleNode("/html/body/div[3]/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/div/div/div/div/div/div/div/div/div/div[2]");
@@ -68,6 +72,31 @@ namespace DumpNESSite
 
                         string src = imgNode.Attributes["src"].Value + ";" + width + ";" + height;
                         changedNodes.Add(src, imgNode);
+                    }
+
+                    //IEnumerable<HtmlAgilityPack.HtmlNode> boldNodes = contentNode.Descendants("b");
+
+                    //foreach (HtmlAgilityPack.HtmlNode boldNode in boldNodes)
+                    //{
+                    //    string src = "[center]" + boldNode.InnerText.Replace("&nbsp;", "") + "[/center]";
+                    //    changedNodes.Add(src, boldNode);
+                    //}
+
+                    IEnumerable<HtmlAgilityPack.HtmlNode> spanNodes = contentNode.Descendants("span");
+
+                    foreach (HtmlAgilityPack.HtmlNode spanNode in spanNodes)
+                    {
+                        string src = spanNode.InnerText;
+                        src = src.Replace("&nbsp;", "");
+                        src = src.Replace("\n", " ");
+
+                        if (!string.IsNullOrWhiteSpace(src))
+                        {
+                            if (!changedNodes.ContainsKey(src))
+                            {
+                                changedNodes.Add(src, spanNode);
+                            }
+                        }
                     }
 
                     foreach (KeyValuePair<string, HtmlAgilityPack.HtmlNode> kvp in changedNodes)
@@ -96,7 +125,7 @@ namespace DumpNESSite
 
                     //outputcontent = Regex.Replace(outputcontent, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
                     //outputcontent = Regex.Replace(outputcontent, @"$[\r\n\r\n\r\n]*", "", RegexOptions.Multiline);
-
+                                        
                     string[] outputsplit = outputcontent.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
 
                     //txtOutput.Text += outputcontent.Trim();
@@ -108,6 +137,8 @@ namespace DumpNESSite
                     oPara1.Range.Font.Size = 24;
                     //oPara1.Format.SpaceAfter = 24;
                     oPara1.Range.InsertParagraphAfter();
+
+                    bool previousLineImage = false;
 
                     foreach (string outputline in outputsplit)
                     {
@@ -144,6 +175,8 @@ namespace DumpNESSite
                                     oPara2.Alignment = Microsoft.Office.Interop.Word.WdParagraphAlignment.wdAlignParagraphCenter;
 
                                     oPara2.Range.InlineShapes.AddPicture(tempImage, false);
+
+                                    previousLineImage = true;
                                 }
                                 catch { }
                             }
@@ -151,14 +184,9 @@ namespace DumpNESSite
                             {
                                 oPara2.Range.Font.Size = 10;
 
-                                string codePoint = "00A0";
-
-                                int code = int.Parse(codePoint, System.Globalization.NumberStyles.HexNumber);
-                                string unicodeString = char.ConvertFromUtf32(code).ToString();
-
                                 oPara2.Range.Text = outputline.Replace("  ", " ").Trim();
 
-                                if (outputline.StartsWith(unicodeString))
+                                if (previousLineImage)
                                 {
                                     oPara2.Range.Font.Italic = 1;
                                     oPara2.Range.Font.Size = 8;
@@ -170,10 +198,11 @@ namespace DumpNESSite
                                     oPara2.Alignment = Microsoft.Office.Interop.Word.WdParagraphAlignment.wdAlignParagraphLeft;
                                 }
 
+                                oPara2.Format.SpaceAfter = 10;
+                                previousLineImage = false;
                             }
 
                             oPara2.Range.Font.Bold = 0;
-                            oPara2.Format.SpaceAfter = 10;
                             oPara2.Range.InsertParagraphAfter();
                         }
                     }
