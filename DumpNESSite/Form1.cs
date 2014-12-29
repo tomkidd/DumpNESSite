@@ -52,14 +52,20 @@ namespace DumpNESSite
                     HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
                     doc.OptionFixNestedTags = true;
                     doc.LoadHtml(new System.Net.WebClient().DownloadString(url));
-                    string title = doc.DocumentNode.SelectSingleNode("/html/body/div[3]/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/div/div/div/div/div/div/div/div/div/h3").InnerText;
 
+                    // Title Node
+                    HtmlAgilityPack.HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("/html/body/div[3]/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/div/div/div/div/div/div/div/div/div/h3");
+                    string titleNodeHTML = titleNode.OuterHtml;
+                    
+                    string title = titleNode.InnerText;
                     if (title.Split(new string[] { " - " }, StringSplitOptions.None).Length == 2)
                     {
                         title = title.Split(new string[] { " - " }, StringSplitOptions.None)[1].Trim();
                     }
 
+                    // Content Node
                     HtmlAgilityPack.HtmlNode contentNode = doc.DocumentNode.SelectSingleNode("/html/body/div[3]/div[2]/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[4]/div/div/div/div/div/div/div/div/div/div[2]");
+                    string contentNodeHTML = contentNode.OuterHtml;
 
                     IEnumerable<HtmlAgilityPack.HtmlNode> imgNodes = contentNode.Descendants("img");
 
@@ -73,14 +79,6 @@ namespace DumpNESSite
                         string src = imgNode.Attributes["src"].Value + ";" + width + ";" + height;
                         changedNodes.Add(src, imgNode);
                     }
-
-                    //IEnumerable<HtmlAgilityPack.HtmlNode> boldNodes = contentNode.Descendants("b");
-
-                    //foreach (HtmlAgilityPack.HtmlNode boldNode in boldNodes)
-                    //{
-                    //    string src = "[center]" + boldNode.InnerText.Replace("&nbsp;", "") + "[/center]";
-                    //    changedNodes.Add(src, boldNode);
-                    //}
 
                     IEnumerable<HtmlAgilityPack.HtmlNode> spanNodes = contentNode.Descendants("span");
 
@@ -116,31 +114,52 @@ namespace DumpNESSite
 
                     outputcontent = outputcontent.Replace(Environment.NewLine + Environment.NewLine + Environment.NewLine, Environment.NewLine);
 
-                    //outputcontent = string.Join(
-                    //             Environment.NewLine,
-                    //             outputcontent.Split(new[] { Environment.NewLine }, StringSplitOptions.None).Select(s => s.Trim()));
-
                     sbOutput.AppendLine(title);
-                    //sbOutput.Append(outputcontent);
-
-                    //outputcontent = Regex.Replace(outputcontent, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
-                    //outputcontent = Regex.Replace(outputcontent, @"$[\r\n\r\n\r\n]*", "", RegexOptions.Multiline);
                                         
                     string[] outputsplit = outputcontent.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-
-                    //txtOutput.Text += outputcontent.Trim();
 
                     Microsoft.Office.Interop.Word.Paragraph oPara1;
                     oPara1 = oDoc.Content.Paragraphs.Add(ref m);
                     oPara1.Range.Text = title;
                     oPara1.Range.Font.Bold = 1;
                     oPara1.Range.Font.Size = 24;
-                    //oPara1.Format.SpaceAfter = 24;
                     oPara1.Range.InsertParagraphAfter();
+
+                    string prevLine = "";
+                    string currentLine = "";
+
+                    var outputList = new List<string>();
+                    foreach (string outputLine in outputsplit)
+                    {
+                        if ((prevLine != "") && (!outputLine.Trim().StartsWith("PLAYERS:") && (!outputLine.Trim().StartsWith("http://"))))
+                        {
+                            currentLine += " " + outputLine.Trim();
+                        }
+                        else
+                        {
+                            if ((outputLine != "") || (outputLine.Trim().StartsWith("http://")))
+                            {
+                                outputList.Add(currentLine.Trim());
+                                currentLine = outputLine.Trim();
+                            }
+                        }
+                         //)
+                        if (outputLine.Trim().StartsWith("http://")|| (outputLine.Trim().StartsWith("RELEASE DATE:")))
+                        {
+                            prevLine = "";
+                        }
+                        else
+                        {
+                            prevLine = outputLine;
+                        }
+                    }
+                    outputList.Add(currentLine); // man this is bad
 
                     bool previousLineImage = false;
 
-                    foreach (string outputline in outputsplit)
+                    bool firstImage = false;
+
+                    foreach (string outputline in outputList)
                     {
                         if (!string.IsNullOrWhiteSpace(outputline.Trim()))
                         {
@@ -177,6 +196,13 @@ namespace DumpNESSite
                                     oPara2.Range.InlineShapes.AddPicture(tempImage, false);
 
                                     previousLineImage = true;
+
+                                    // Page break after first image, which is almost certainly the cover art
+                                    if (firstImage)
+                                    {
+                                        oDoc.Words.Last.InsertBreak(Microsoft.Office.Interop.Word.WdBreakType.wdPageBreak);
+                                        firstImage = false;
+                                    }
                                 }
                                 catch { }
                             }
@@ -210,9 +236,6 @@ namespace DumpNESSite
                     oDoc.Words.Last.InsertBreak(Microsoft.Office.Interop.Word.WdBreakType.wdPageBreak);
                 }
 
-                //oDoc.Save();
-
-                //oWord.Application.Quit(ref m, ref m, ref m);
                 txtOutput.Text = sbOutput.ToString();
             }
         }
@@ -263,13 +286,6 @@ namespace DumpNESSite
         private void Form1_Load(object sender, EventArgs e)
         {
             txtLinks.Text = File.ReadAllText("links.txt");
-
-            //string[] links = File.ReadAllLines("links.txt");
-
-            //for (int i = 0; i < 5; i++)
-            //{
-            //    txtLinks.Text += links[i] + Environment.NewLine;
-            //}
         }
 
     }
